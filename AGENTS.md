@@ -80,15 +80,20 @@ names or effort across providers.
 The developer-selected session remains coordinator; do not spawn a replacement.
 Instructions cannot change its running model.
 
+In OpenAI assignments, `6.x` selects the newest available v6 minor version
+of the named family that supports the requested effort. Resolve it against
+the harness's available models at invocation and pass the concrete model ID.
+An explicit version pin takes precedence.
+
 | Role | Codex assignment | Work |
 |---|---|---|
-| Judgment | `gpt-6-sol`, `high` minimum | Exploration sufficiency, architecture, ambiguity, oracle creation, finding disposition, and final integration judgment. |
-| Bounded implementation | `gpt-6-luna`, `xhigh` default/minimum | Execution with an established oracle; `max` only under the attribution policy below. |
-| Independent adversarial review | `gpt-6-sol`, `high` minimum, fresh context | Authorized code or approach review, separate from the implementer and oracle author. |
+| Judgment | `gpt-6.x-sol`, `high` minimum | Exploration sufficiency, architecture, ambiguity, oracle creation, finding disposition, and final integration judgment. |
+| Bounded implementation | `gpt-6.x-luna`, `xhigh` default/minimum | Execution with an established oracle; `max` only under the attribution policy below. |
+| Independent adversarial review | `gpt-6.x-sol`, `high` minimum, fresh context | Authorized code or approach review, separate from the implementer and oracle author. |
 
-A developer may explicitly override a task or session assignment with a concrete
+A developer may explicitly override a task or session assignment with a
 model and effort; record it as an override, not a new default. For example,
-`gpt-6-sol` at `high` is a valid explicit bounded-implementation choice even
+`gpt-6.x-sol` at `high` is a valid explicit bounded-implementation choice even
 though the Luna default uses `xhigh`. Do not rank effort labels across models.
 Judgment and review floors remain unless the developer deliberately changes them.
 The coordinator owns sequencing, tool execution, delegation, mechanical
