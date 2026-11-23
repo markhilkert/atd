@@ -152,6 +152,77 @@ func TestVerifyRequiresBothCandidateGates(t *testing.T) {
 	}
 }
 
+func TestCLIVerifyReportsEachInvalidGateAndNextCommand(t *testing.T) {
+	fixture := newVerifiedFixture(t)
+	withTestRunnerDirectory(t, fixture.repository)
+
+	failure := latestTestObservation(t, fixture.repository)
+	failure.Mode = testModeFast
+	failure.Command = []string{"./script/" + testFastScript}
+	failure.ExitStatus = 1
+	if _, err := appendTestObservation(fixture.repository, failure); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	err := runCLI([]string{"verify", "--base", fixture.base, "--candidate", fixture.candidate}, &output)
+	if err == nil {
+		t.Fatal("verify accepted a failed fast gate")
+	}
+	for _, want := range []string{"fast: failed", "full: passed", "atd test fast"} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("missing %q from gate report:\n%s", want, output.String())
+		}
+	}
+	if strings.Contains(output.String(), "atd test full") {
+		t.Fatalf("verify recommended rerunning the passing full gate:\n%s", output.String())
+	}
+
+	writeTestRunnerFile(t, filepath.Join(fixture.repository, "notes.md"), "new candidate tree\n")
+	newCandidate := commitAll(t, fixture.repository, "docs: change candidate tree")
+	output.Reset()
+	err = runCLI([]string{"verify", "--base", fixture.base, "--candidate", newCandidate}, &output)
+	if err == nil {
+		t.Fatal("verify accepted a candidate with no matching gate records")
+	}
+	for _, want := range []string{"fast: no matching record", "full: no matching record", "atd test fast", "atd test full"} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("missing %q from gate report:\n%s", want, output.String())
+		}
+	}
+}
+
+func TestCLIVerifyReportsChangedFilesAndHistoryForBothGates(t *testing.T) {
+	fixture := newVerifiedFixture(t)
+	withTestRunnerDirectory(t, fixture.repository)
+
+	observation := latestTestObservation(t, fixture.repository)
+	filesChanged := observation
+	filesChanged.Mode = testModeFast
+	filesChanged.Command = []string{"./script/" + testFastScript}
+	filesChanged.AfterTree = strings.Repeat("a", 40)
+	filesChanged.SourceChanged = true
+	if _, err := appendTestObservation(fixture.repository, filesChanged); err != nil {
+		t.Fatal(err)
+	}
+	historyChanged := observation
+	historyChanged.AfterHead = strings.Repeat("b", 40)
+	historyChanged.HistoryChanged = true
+	if _, err := appendTestObservation(fixture.repository, historyChanged); err != nil {
+		t.Fatal(err)
+	}
+
+	var output bytes.Buffer
+	err := runCLI([]string{"verify", "--base", fixture.base, "--candidate", fixture.candidate}, &output)
+	if err == nil {
+		t.Fatal("verify accepted gate runs that changed files or history")
+	}
+	for _, want := range []string{"fast: changed files", "full: changed history", "atd test fast", "atd test full"} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("missing %q from gate report:\n%s", want, output.String())
+		}
+	}
+}
+
 func TestVerifyAllowsStablePreCommitGreenForUnchangedCandidateTree(t *testing.T) {
 	repository := newVerifierRepository(t)
 	base := verifierHead(t, repository)
