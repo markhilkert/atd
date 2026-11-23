@@ -16,10 +16,13 @@ commands, and the current `scope:` value and source from primary-workspace
 absent and recheck the primary workspace before later consequential decisions.
 
 The implementer owns production edits, focused tests, debugging and refactoring;
-individual inner tests need no approval. Escalate new behavior decisions, changed
-or weakened agreed assertions, new consumer/deployment contracts, changed coverage
-claims, or consequential design problems shared across boundaries before further
-slices can compound them. The coordinator resolves uncertainty and lets the
+individual inner tests need no approval. Escalate new behavior decisions, new
+consumer/deployment contracts, changed coverage claims, or consequential design
+problems shared across boundaries before further slices can compound them. For
+changes to agreed acceptance criteria, follow the
+[feature-contract amendment procedure](../feature-contract/SKILL.md#amendments),
+even when no feature-contract file exists. Routine test edits within agreed
+behavior stay delegated. The coordinator resolves uncertainty and lets the
 implementer continue without duplicating the work. Routine refactoring remains
 implementer-owned and needs no per-extraction approval.
 

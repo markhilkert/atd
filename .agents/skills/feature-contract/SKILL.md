@@ -65,10 +65,12 @@ When the feature cannot be specified until something is learned, run a
 
 ## Amendments
 
-Before changing a contract or its acceptance tests to add, change, or remove a
-binding requirement or constraint, get the decision holder's express approval
-of the exact current and proposed wording and the concrete solution whose
-acceptance changes. Preserve the current contract and tests until approval.
+Before changing agreed acceptance criteria to add, change, or remove a binding
+requirement or constraint, get the decision holder's express approval of the
+exact current and proposed wording and the concrete solution and acceptance
+behavior that would change. This applies whether criteria are recorded in a
+feature contract, acceptance tests, or elsewhere. Preserve current written
+criteria and tests until approval.
 Existing delegation remains effective within its mandate. Approval to try an
 approach authorizes that attempt only; it leaves alternatives open and does not
 itself change the contract or acceptance criteria. Moving a settled question
