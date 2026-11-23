@@ -34,8 +34,11 @@ work around it.
 
 - Keep `main` as the only long-lived branch. Land reviewed, tested changes there
   and record user-visible changes under Unreleased.
-- Get explicit release approval separately from push approval. Tag the tested
-  commit with an immutable `vX.Y.Z` and publish concise release notes.
+- Get explicit release approval. Move Unreleased entries to a versioned section
+  in `CHANGELOG.md` and verify the release commit with the fast and full gates.
+- Tag that commit with an immutable `vX.Y.Z`. Push the approved branch and tag
+  using the Git checks above, publish the versioned notes as a GitHub Release,
+  and confirm the remote tag resolves to the tested commit.
 - If an urgent fix cannot ship from `main`, branch from the affected release tag
   temporarily and bring the fix back to `main`.
 - `@latest` selects a release tag. Use `@main` to opt into unreleased commits.
