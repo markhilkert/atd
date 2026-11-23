@@ -24,7 +24,22 @@ work around it.
 - Commit title: `<type>: imperative summary`, with `feat`, `fix`, `chore`,
   `refactor`, `test` or `docs`; no scope.
 - Always ask before pushing. Do not stage or overwrite unrelated files.
-- Keep machine-specific values out of tracked files.
+- Keep credentials and private personal/work information out of files, commit
+  history, and shared output. Use synthetic examples and portable paths;
+  intentional public attribution and local runtime paths are fine.
+- Before pushing, inspect outgoing changes/history and run Gitleaks. Push only
+  intended branches/tags; never mirror or publish local ATD refs.
+
+## Releases
+
+- Keep `main` as the only long-lived branch. Land reviewed, tested changes there
+  and record user-visible changes under Unreleased.
+- Get explicit release approval separately from push approval. Tag the tested
+  commit with an immutable `vX.Y.Z` and publish concise release notes.
+- If an urgent fix cannot ship from `main`, branch from the affected release tag
+  temporarily and bring the fix back to `main`.
+- `@latest` selects a release tag. Use `@main` to opt into unreleased commits.
+  Only tagged releases trigger ATD’s release-version notice.
 
 ## Tools and execution setup
 
