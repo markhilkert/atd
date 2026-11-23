@@ -149,6 +149,12 @@ it ran. Runs made before committing count, as long as the files were identical.
 For each gate, the latest matching run decides: a newer failing or unstable run
 cancels an older pass. Targeted runs never satisfy a gate.
 
+If either gate is invalid, `atd verify` reports both gate results: `passed`,
+`no matching record`, `failed` with its exit, signal or launch reason, or
+`changed files` and/or `changed history`. It recommends rerunning only invalid
+gates with the command in this worktree at the candidate's exact tree, such as
+`atd test fast`, and exits with status 1.
+
 It also summarizes evidence for review, without affecting the result:
 
 - **Credible red observations:** stable failing fast or targeted runs.

@@ -84,13 +84,27 @@ func verifyCandidate(repository, baseArgument, candidateArgument string, output 
 	if err != nil {
 		return err
 	}
-	fast := hasCandidateGreen(observations, repository, candidateTree, testModeFast, []string{"./script/" + testFastScript})
-	if !fast {
-		return errors.New("candidate lacks a stable local green fast observation on its exact tree")
+	gates := []candidateGate{
+		{mode: testModeFast, command: []string{"./script/" + testFastScript}},
+		{mode: testModeFull, command: []string{"./script/" + testFullScript}},
 	}
-	full := hasCandidateGreen(observations, repository, candidateTree, testModeFull, []string{"./script/" + testFullScript})
-	if !full {
-		return errors.New("candidate lacks a stable local green full observation on its exact tree")
+	results := make([]candidateGateResult, len(gates))
+	for index, gate := range gates {
+		results[index] = classifyCandidateGate(observations, repository, candidateTree, gate.mode, gate.command)
+	}
+	var invalidModes []string
+	for index, result := range results {
+		if !result.passed {
+			invalidModes = append(invalidModes, string(gates[index].mode))
+		}
+	}
+	if len(invalidModes) > 0 {
+		printCandidateGateResults(output, gates, results)
+		missing := make([]string, len(invalidModes))
+		for index, mode := range invalidModes {
+			missing[index] = "stable green " + mode + " gate"
+		}
+		return fmt.Errorf("candidate lacks %s", strings.Join(missing, " and "))
 	}
 	printVerificationSummary(output, repository, relevantRedHeads, observations, boundReds)
 	return nil
@@ -195,14 +209,61 @@ func sameWorktree(observed, repository string) bool {
 	return err == nil && canonical == repository
 }
 
-func hasCandidateGreen(observations []testObservation, repository, tree string, mode testMode, command []string) bool {
+type candidateGate struct {
+	mode    testMode
+	command []string
+}
+
+type candidateGateResult struct {
+	matched bool
+	passed  bool
+	issues  []string
+}
+
+func (result candidateGateResult) status() string {
+	if !result.matched {
+		return "no matching record"
+	}
+	if result.passed {
+		return "passed"
+	}
+	return strings.Join(result.issues, "; ")
+}
+
+func classifyCandidateGate(observations []testObservation, repository, tree string, mode testMode, command []string) candidateGateResult {
 	for index := len(observations) - 1; index >= 0; index-- {
 		observation := observations[index]
 		if observation.BeforeTree == tree && observation.Mode == mode && slices.Equal(observation.Command, command) && sameWorktree(observation.Worktree, repository) {
-			return observation.ExitStatus == 0 && !observation.Signaled && !observation.LaunchFailed && stableObservation(observation)
+			result := candidateGateResult{matched: true}
+			if !stableObservation(observation) {
+				if observation.SourceChanged || observation.BeforeTree != observation.AfterTree {
+					result.issues = append(result.issues, "changed files")
+				}
+				if observation.HistoryChanged || observation.BeforeHead != observation.AfterHead {
+					result.issues = append(result.issues, "changed history")
+				}
+			}
+			if observation.Signaled {
+				result.issues = append(result.issues, fmt.Sprintf("failed (signal; exit status %d)", observation.ExitStatus))
+			} else if observation.LaunchFailed {
+				result.issues = append(result.issues, fmt.Sprintf("failed (launch failed; exit status %d)", observation.ExitStatus))
+			} else if observation.ExitStatus != 0 {
+				result.issues = append(result.issues, fmt.Sprintf("failed (exit status %d)", observation.ExitStatus))
+			}
+			result.passed = len(result.issues) == 0
+			return result
 		}
 	}
-	return false
+	return candidateGateResult{}
+}
+
+func printCandidateGateResults(output io.Writer, gates []candidateGate, results []candidateGateResult) {
+	for index, gate := range gates {
+		fmt.Fprintf(output, "%s: %s\n", gate.mode, results[index].status())
+		if !results[index].passed {
+			fmt.Fprintf(output, "  rerun on this worktree at the candidate's exact tree: atd test %s\n", gate.mode)
+		}
+	}
 }
 
 func relevantRedObservationHeads(repository, base string, commits []string) (map[string]bool, error) {

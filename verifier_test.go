@@ -298,27 +298,31 @@ func TestCandidateGateMatchesIdentityBeforeJudgingLatestResult(t *testing.T) {
 		Mode: testModeFast, Command: []string{"./script/test_fast"}, ObservedAt: "2026-09-08T12:00:00Z",
 	}
 	for _, test := range []struct {
-		name   string
-		change func(*testObservation)
-		want   bool
+		name       string
+		change     func(*testObservation)
+		wantPassed bool
+		wantStatus string
 	}{
-		{"later red despite older clock", func(o *testObservation) { o.ExitStatus = 1 }, false},
-		{"source changed", func(o *testObservation) { o.SourceChanged = true; o.AfterTree = strings.Repeat("c", 40) }, false},
-		{"history changed", func(o *testObservation) { o.HistoryChanged = true; o.AfterHead = strings.Repeat("c", 40) }, false},
-		{"signal", func(o *testObservation) { o.Signaled = true; o.ExitStatus = 137 }, false},
-		{"launch failure", func(o *testObservation) { o.LaunchFailed = true; o.ExitStatus = 127 }, false},
-		{"different starting tree", func(o *testObservation) { o.BeforeTree = strings.Repeat("c", 40); o.ExitStatus = 1 }, true},
-		{"different worktree", func(o *testObservation) { o.Worktree = otherWorktree; o.ExitStatus = 1 }, true},
-		{"different mode", func(o *testObservation) { o.Mode = testModeTargeted; o.ExitStatus = 1 }, true},
-		{"different command", func(o *testObservation) { o.Command = []string{"false"}; o.ExitStatus = 1 }, true},
+		{"later red despite older clock", func(o *testObservation) { o.ExitStatus = 1 }, false, "failed (exit status 1)"},
+		{"source changed", func(o *testObservation) { o.SourceChanged = true; o.AfterTree = strings.Repeat("c", 40) }, false, "changed files"},
+		{"history changed", func(o *testObservation) { o.HistoryChanged = true; o.AfterHead = strings.Repeat("c", 40) }, false, "changed history"},
+		{"signal", func(o *testObservation) { o.Signaled = true; o.ExitStatus = 137 }, false, "failed (signal; exit status 137)"},
+		{"launch failure", func(o *testObservation) { o.LaunchFailed = true; o.ExitStatus = 127 }, false, "failed (launch failed; exit status 127)"},
+		{"different starting tree", func(o *testObservation) { o.BeforeTree = strings.Repeat("c", 40); o.ExitStatus = 1 }, true, "passed"},
+		{"different worktree", func(o *testObservation) { o.Worktree = otherWorktree; o.ExitStatus = 1 }, true, "passed"},
+		{"different mode", func(o *testObservation) { o.Mode = testModeTargeted; o.ExitStatus = 1 }, true, "passed"},
+		{"different command", func(o *testObservation) { o.Command = []string{"false"}; o.ExitStatus = 1 }, true, "passed"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			latest := green
 			latest.ObservedAt = "2026-09-08T11:00:00Z"
 			test.change(&latest)
-			got := hasCandidateGreen([]testObservation{green, latest}, repository, green.BeforeTree, green.Mode, green.Command)
-			if got != test.want {
-				t.Fatalf("candidate green = %v, want %v", got, test.want)
+			got := classifyCandidateGate([]testObservation{green, latest}, repository, green.BeforeTree, green.Mode, green.Command)
+			if got.passed != test.wantPassed {
+				t.Fatalf("candidate gate passed = %v, want %v", got.passed, test.wantPassed)
+			}
+			if got.status() != test.wantStatus {
+				t.Fatalf("candidate gate status = %q, want %q", got.status(), test.wantStatus)
 			}
 		})
 	}

@@ -329,7 +329,7 @@ them:
 | # | Mode | Exit | Tree before | `HEAD` before | Role in verify |
 |---|---|---|---|---|---|
 | 1 | fast | 1 | `cb0ed3f` | `fcf2c2f` | Bound red: commit `866d679` has parent `fcf2c2f` and tree `cb0ed3f` [`boundRedCommits`]. |
-| 2 | fast | 0 | `d764e4c` | `866d679` | Fast gate. It ran *before* the implementation was committed, but on the tree the candidate has [`hasCandidateGreen`]. |
+| 2 | fast | 0 | `d764e4c` | `866d679` | Fast gate. It ran *before* the implementation was committed, but on the tree the candidate has [`classifyCandidateGate`]. |
 | 3 | full | 0 | `d764e4c` | `400ee85` | Full gate [`verifyCandidate`]. |
 
 Only the last two lines of that table are gates. The red evidence is counted and
@@ -372,10 +372,17 @@ symlink-resolved path of the worktree it ran in, which
 the red summary ignore observations from any other path [`sameWorktree`]. A
 green suite in a reviewer's scratch worktree says nothing about the same commit
 in yours ([`TestCandidateGateMatchesIdentityBeforeJudgingLatestResult`], the
-"different worktree" case). **Observed:** renaming the checkout directory with
-`mv` turns a passing `atd verify` into `candidate lacks a stable local green
-fast observation on its exact tree`, because no recorded path resolves to the
-new location.
+"different worktree" case). **Observed in a disposable repository:** after
+renaming the checkout directory with `mv`, `atd verify` no longer matches either
+gate observation and reports:
+
+```text
+fast: no matching record
+  rerun on this worktree at the candidate's exact tree: atd test fast
+full: no matching record
+  rerun on this worktree at the candidate's exact tree: atd test full
+atd: candidate lacks stable green fast gate and stable green full gate
+```
 
 **The log never leaves the clone on its own.** The ref is outside `refs/heads`
 and `refs/tags`, so default push and fetch refspecs skip it. **Observed:** after
@@ -1438,13 +1445,15 @@ proceeds in this order:
 4. Load and validate every observation in the log [`localTestObservations`].
 5. Work out the advisory red evidence [`boundRedCommits`],
    [`relevantRedObservationHeads`].
-6. Check the fast gate, then the full gate, against the candidate's tree
-   [`commitTree`], [`hasCandidateGreen`].
-7. Print the summary [`printVerificationSummary`].
+6. Classify both registered gates against the candidate's tree
+   [`commitTree`], [`classifyCandidateGate`].
+7. If either gate is invalid, report both gate results and recommend rerunning
+   only invalid gates. Otherwise print the success summary
+   [`printCandidateGateResults`], [`printVerificationSummary`].
 
 ### The gate
 
-A gate is one call to [`hasCandidateGreen`]. It walks the observations from
+A gate is one call to [`classifyCandidateGate`]. It walks the observations from
 newest to oldest and stops at the first one that matches on all four of:
 
 - `before_tree` equals the candidate commit's tree,
@@ -1453,16 +1462,17 @@ newest to oldest and stops at the first one that matches on all four of:
 - the worktree `atd verify` is running in.
 
 That single observation decides. The gate passes if it exited 0, was not
-signaled, did not fail to launch, and was stable; otherwise it fails. Identity
-is matched before the result is looked at, so a newer failure on the same tree
-cancels an older pass, and a newer pass restores it
+signaled, did not fail to launch, and was stable. Otherwise `atd verify`
+reports whether it failed, changed files, changed history, or has no matching
+record. Identity is matched before the result is looked at, so a newer failure
+on the same tree cancels an older pass, and a newer pass restores it
 [`TestCandidateGateMatchesIdentityBeforeJudgingLatestResult`],
 [`TestVerifyUsesLatestCandidateGateObservation`]. Both gates are required; one
 is not enough [`TestVerifyRequiresBothCandidateGates`]. This is the direction's
 "latest observation by ref append order" rule [DIRECTION.md#verify].
 
 **Observed** near misses and hits, each a different way of matching or missing
-the four conditions in [`hasCandidateGreen`]:
+the four conditions in [`classifyCandidateGate`]:
 
 | Run | Counts for the gate? |
 |---|---|
@@ -1490,9 +1500,9 @@ the advisory summary, nothing more [`verifyCandidate`].
 
 ### The advisory summary
 
-Everything `atd verify` prints besides `candidate gates: fast green; full green`
-is information for a reviewer. The direction is explicit that missing or odd red
-evidence is review input and never grounds for rejection [DIRECTION.md#verify].
+On success, the red summary is information for a reviewer. The direction is
+explicit that missing or odd red evidence is review input and never grounds for
+rejection [DIRECTION.md#verify].
 
 | Line | Definition | Code |
 |---|---|---|
@@ -1524,11 +1534,24 @@ at the base itself stays bound, since the base is not rewritten.
 
 ### Output
 
-On success the summary goes to stdout and the exit code is 0. On failure there
-is one line on stderr, exit code 1, and nothing on stdout: the gates are checked
-before the summary is printed, so a failing candidate shows no red evidence
-either. The fast gate is checked first, so when both are missing you are told
-about fast [`verifyCandidate`].
+On success the unchanged summary goes to stdout and the exit code is 0. If a
+gate is invalid, stdout reports both gate results and gives a rerun command only
+for each invalid gate, bound to this worktree and the candidate's exact tree;
+stderr names the missing stable green gate, and the exit code is 1. **Observed
+in a disposable repository** with a failed fast run and a passing full run:
+
+```text
+fast: failed (exit status 1)
+  rerun on this worktree at the candidate's exact tree: atd test fast
+full: passed
+atd: candidate lacks stable green fast gate
+```
+
+A gate with no matching record says `no matching record`; an unstable
+observation says `changed files`, `changed history`, or both. The red summary
+remains success-only [`verifyCandidate`],
+[`printCandidateGateResults`], [`TestCLIVerifyReportsEachInvalidGateAndNextCommand`],
+[`TestCLIVerifyReportsChangedFilesAndHistoryForBothGates`].
 
 Verification reads every record [`localTestObservations`], so its cost grows
 with the log: **observed** 8 + N + 3C `git` processes for N observations and C
@@ -1886,7 +1909,7 @@ Errors and refusals:
 | `usage: atd verify --base <commit> --candidate <commit>` | `verify` | [`parseVerifyCommand`] |
 | `resolving base commit: "…" is not a commit` (or `candidate`) | `verify` | [`verifyCandidate`], [`resolveCommit`] |
 | `base commit is not an ancestor of candidate` | `verify` | [`verifyCandidate`] |
-| `candidate lacks a stable local green fast observation on its exact tree` (or `full`) | `verify` | [`verifyCandidate`] |
+| `candidate lacks stable green fast gate` (or `full`) | `verify` | [`verifyCandidate`] |
 | `local observation … uses unsupported schema "…"`, or `local observation …` followed by the rule from [section 5](#reading) it breaks, such as `mode must be fast, full, or targeted` | `verify` | [`localTestObservations`], [`validateTestObservation`] |
 | `usage: atd enable claude \| codex`, `unknown harness "…"; usage: atd enable claude \| codex` | `enable` | [`runCLI`] |
 | `refusing to write files atd does not own: …; move them aside and retry` | `enable`, `update` | [`refuseEditedSkills`] |
@@ -1984,8 +2007,8 @@ Windows, and behavior with a C library that translates error messages.
 [README.md#what-a-cycle-looks-like]: ../README.md#what-a-cycle-looks-like
 [`TestATDFilesStayExcludedWhenWritesFail`]: ../enable_test.go#L500-L536
 [`TestAppendTestObservationOutlastsTransientRefContention`]: ../test_runner_test.go#L457-L503
-[`TestCLIVerifySucceedsAfterMechanicalGates`]: ../verifier_test.go#L396-L403
-[`TestCandidateGateMatchesIdentityBeforeJudgingLatestResult`]: ../verifier_test.go#L218-L254
+[`TestCLIVerifySucceedsAfterMechanicalGates`]: ../verifier_test.go#L471-L478
+[`TestCandidateGateMatchesIdentityBeforeJudgingLatestResult`]: ../verifier_test.go#L289-L329
 [`TestClaudeAgentWorktreesStayOutOfCandidateGates`]: ../enable_test.go#L721-L747
 [`TestClaudeHookDeliversSteeringContext`]: ../enable_test.go#L826-L852
 [`TestConcurrentTestObservationsAreNotLost`]: ../test_runner_test.go#L423-L455
@@ -2010,6 +2033,8 @@ Windows, and behavior with a C library that translates error messages.
 [`TestGeneratedTestStubIsRejectedBeforeExecution`]: ../runner_modes_test.go#L145-L164
 [`TestGitOutputRetainsStdoutAndStderrOnError`]: ../test_runner_test.go#L534-L550
 [`TestGitOutputReturnsOnlyStdoutWhenGitWarns`]: ../test_runner_test.go#L521-L532
+[`TestCLIVerifyReportsChangedFilesAndHistoryForBothGates`]: ../verifier_test.go#L194-L224
+[`TestCLIVerifyReportsEachInvalidGateAndNextCommand`]: ../verifier_test.go#L155-L192
 [`TestHarnessCommandSurface`]: ../enable_test.go#L800-L811
 [`TestHarnessLifecyclePreservesRepositoryScope`]: ../scope_test.go#L205-L227
 [`TestHookContextIsJSONEncoded`]: ../enable_test.go#L854-L871
@@ -2028,7 +2053,7 @@ Windows, and behavior with a C library that translates error messages.
 [`TestObservationsAppendToGitHistory`]: ../test_runner_test.go#L194-L207
 [`TestObservedTreeMatchesDirtyWorktreeWhenItIsCommitted`]: ../test_runner_test.go#L177-L192
 [`TestOrdinaryInitDoesNotEnableHarnesses`]: ../enable_test.go#L813-L824
-[`TestParseVerifyCommand`]: ../verifier_test.go#L405-L413
+[`TestParseVerifyCommand`]: ../verifier_test.go#L480-L488
 [`TestPreviousObservationMatchesModeExactly`]: ../runner_modes_test.go#L224-L245
 [`TestPreviousTestObservationLoadsLargeEventGeneration`]: ../test_observation_index_test.go#L156-L188
 [`TestPreviousTestObservationRebuildsAfterCacheDeletion`]: ../test_observation_index_test.go#L52-L80
@@ -2091,21 +2116,21 @@ Windows, and behavior with a C library that translates error messages.
 [`TestUpdateRequestsCodexTrustWhenHookCommandChanges`]: ../enable_test.go#L315-L339
 [`TestUpdateRequiresEnabledHarness`]: ../enable_test.go#L791-L798
 [`TestValidateTestObservationIdentifiesInvalidField`]: ../observation_validation_test.go#L18-L55
-[`TestVerificationAnomalySummaryIsScopedAndBounded`]: ../verifier_test.go#L285-L315
-[`TestVerifyAllowsMergeInRange`]: ../verifier_test.go#L350-L366
-[`TestVerifyAllowsStablePreCommitGreenForUnchangedCandidateTree`]: ../verifier_test.go#L155-L180
+[`TestVerificationAnomalySummaryIsScopedAndBounded`]: ../verifier_test.go#L360-L390
+[`TestVerifyAllowsMergeInRange`]: ../verifier_test.go#L425-L441
+[`TestVerifyAllowsStablePreCommitGreenForUnchangedCandidateTree`]: ../verifier_test.go#L226-L251
 [`TestVerifyBoundsRedCandidateOutput`]: ../verifier_test.go#L77-L94
 [`TestVerifyLeavesMissingOuterRedForAdvisoryReview`]: ../verifier_test.go#L117-L134
 [`TestVerifyLeavesUnmatchedInnerRedsAdvisory`]: ../verifier_test.go#L65-L75
-[`TestVerifyLocalEvidenceDoesNotSurviveFreshClone`]: ../verifier_test.go#L335-L348
-[`TestVerifyRejectsStaleCandidateEvidence`]: ../verifier_test.go#L182-L190
+[`TestVerifyLocalEvidenceDoesNotSurviveFreshClone`]: ../verifier_test.go#L410-L423
+[`TestVerifyRejectsStaleCandidateEvidence`]: ../verifier_test.go#L253-L261
 [`TestVerifyReportsBoundRedAsAdvisoryAndRequiresExactCandidateGates`]: ../verifier_test.go#L42-L63
-[`TestVerifyReportsExecutionAnomaliesAsAdvisory`]: ../verifier_test.go#L256-L283
+[`TestVerifyReportsExecutionAnomaliesAsAdvisory`]: ../verifier_test.go#L331-L358
 [`TestVerifyRequiresBothCandidateGates`]: ../verifier_test.go#L136-L153
-[`TestVerifyRequiresExactRegisteredGateCommand`]: ../verifier_test.go#L317-L333
-[`TestVerifyScopesMergedBranchRedThatPredatesBase`]: ../verifier_test.go#L368-L394
+[`TestVerifyRequiresExactRegisteredGateCommand`]: ../verifier_test.go#L392-L408
+[`TestVerifyScopesMergedBranchRedThatPredatesBase`]: ../verifier_test.go#L443-L469
 [`TestVerifyScopesRedSummaryToCurrentRange`]: ../verifier_test.go#L96-L115
-[`TestVerifyUsesLatestCandidateGateObservation`]: ../verifier_test.go#L192-L216
+[`TestVerifyUsesLatestCandidateGateObservation`]: ../verifier_test.go#L263-L287
 [`TestVersionCheckComparesWithLatestReleaseTag`]: ../version_test.go#L25-L66
 [`TestVersionCheckReportsUnreachableReleases`]: ../version_test.go#L68-L79
 [`TestVersionCheckTimesOutOnStalledRemote`]: ../version_test.go#L81-L121
@@ -2120,14 +2145,15 @@ Windows, and behavior with a C library that translates error messages.
 [`applyInstallation`]: ../enable.go#L184-L207
 [`assertHookDeliversContextForTest`]: ../enable_test.go#L1070-L1091
 [`assertInstalledHooksForTest`]: ../enable_test.go#L976-L1068
-[`boundRedCommits`]: ../verifier.go#L152-L181
+[`boundRedCommits`]: ../verifier.go#L166-L195
 [`boundedJSONLTail`]: ../test_observation_index.go#L237-L255
 [`buildVersion`]: ../version.go#L23-L29
 [`checkVersion`]: ../version.go#L40-L64
-[`commitIsAncestor`]: ../verifier.go#L107-L117
-[`commitParent`]: ../verifier.go#L135-L145
-[`commitTree`]: ../verifier.go#L127-L133
-[`commitsInRange`]: ../verifier.go#L119-L125
+[`classifyCandidateGate`]: ../verifier.go#L233-L258
+[`commitIsAncestor`]: ../verifier.go#L121-L131
+[`commitParent`]: ../verifier.go#L149-L159
+[`commitTree`]: ../verifier.go#L141-L147
+[`commitsInRange`]: ../verifier.go#L133-L139
 [`countGitProcesses`]: ../test_observation_index_test.go#L190-L215
 [`createTestScriptIfMissing`]: ../test_runner.go#L63-L83
 [`credibleRed`]: ../observation.go#L184-L186
@@ -2153,7 +2179,6 @@ Windows, and behavior with a C library that translates error messages.
 [`harnessStatus`]: ../enable.go#L335-L358
 [`harnessesForTest`]: ../enable_test.go#L31-L50
 [`harnesses`]: ../harness.go#L34-L58
-[`hasCandidateGreen`]: ../verifier.go#L198-L206
 [`hooksFileMode`]: ../harness.go#L15
 [`initializeTestScripts`]: ../test_runner.go#L21-L44
 [`inspectSkills`]: ../skills.go#L149-L192
@@ -2175,21 +2200,22 @@ Windows, and behavior with a C library that translates error messages.
 [`planInstallation`]: ../enable.go#L100-L152
 [`preToolUseGroups`]: ../harness.go#L173-L199
 [`previousTestObservation`]: ../test_observation_index.go#L28-L44
-[`printVerificationSummary`]: ../verifier.go#L223-L270
+[`printCandidateGateResults`]: ../verifier.go#L260-L267
+[`printVerificationSummary`]: ../verifier.go#L284-L331
 [`readExcludeFile`]: ../enable.go#L210-L221
 [`readHookConfiguration`]: ../harness.go#L128-L152
 [`readOwnedSkill`]: ../skills.go#L197-L223
 [`rebuildTestObservationIndex`]: ../test_observation_index.go#L150-L171
 [`reconciledHooks`]: ../harness.go#L203-L211
 [`recordRepositoryHarness`]: ../enable.go#L287-L301
-[`redObservationKey`]: ../verifier.go#L183-L191
+[`redObservationKey`]: ../verifier.go#L197-L205
 [`refUpdateCASContention`]: ../observation.go#L98-L101
 [`refUpdateLockContention`]: ../observation.go#L103-L105
 [`refuseEditedSkills`]: ../enable.go#L154-L163
 [`rejectGeneratedTestStub`]: ../test_runner.go#L217-L239
 [`releaseCheckTimeout`]: ../version.go#L21
 [`releaseRepository`]: ../version.go#L17
-[`relevantRedObservationHeads`]: ../verifier.go#L208-L221
+[`relevantRedObservationHeads`]: ../verifier.go#L269-L282
 [`removeExcludePatterns`]: ../disable.go#L201-L224
 [`removeLeftoverTemporaryFiles`]: ../harness.go#L285-L303
 [`renderSkill`]: ../skills.go#L81-L109
@@ -2199,12 +2225,12 @@ Windows, and behavior with a C library that translates error messages.
 [`repositoryScopeConfigKey`]: ../scope.go#L8
 [`repositoryScopeStatus`]: ../scope.go#L39-L51
 [`requireRealDirectories`]: ../files.go#L11-L30
-[`resolveCommit`]: ../verifier.go#L99-L105
+[`resolveCommit`]: ../verifier.go#L113-L119
 [`runCLI`]: ../main.go#L23-L122
 [`runSteeringHook`]: ../steering.go#L38-L90
 [`runTestCommandWithMode`]: ../test_runner.go#L116-L207
 [`sameOwnedHookHandlers`]: ../enable.go#L426-L438
-[`sameWorktree`]: ../verifier.go#L193-L196
+[`sameWorktree`]: ../verifier.go#L207-L210
 [`setRepositoryScope`]: ../scope.go#L32-L37
 [`shellQuote`]: ../harness.go#L106-L108
 [`skillOwnershipIntact`]: ../skills.go#L116-L128
@@ -2216,7 +2242,7 @@ Windows, and behavior with a C library that translates error messages.
 [`steeringDocumentationPath`]: ../steering.go#L199-L203
 [`steeringEvent`]: ../steering.go#L25-L30
 [`steeringTestPath`]: ../steering.go#L193-L197
-[`summarizeCommand`]: ../verifier.go#L272-L278
+[`summarizeCommand`]: ../verifier.go#L333-L339
 [`temporaryFile`]: ../files.go#L36-L38
 [`testCommandExitError.ExitStatus`]: ../test_runner.go#L112-L114
 [`testCommandExitError`]: ../test_runner.go#L100-L103
@@ -2237,7 +2263,7 @@ Windows, and behavior with a C library that translates error messages.
 [`validVerifierObjectID`]: ../observation.go#L168-L178
 [`validateTestObservation`]: ../observation.go#L119-L166
 [`validateTestScript`]: ../test_runner.go#L46-L61
-[`verifyCandidate`]: ../verifier.go#L46-L97
+[`verifyCandidate`]: ../verifier.go#L46-L111
 [`visitReverseJSONLFileLines`]: ../test_observation_index.go#L257-L284
 [`withSkillOwnership`]: ../skills.go#L111-L114
 [`withoutOwnedHooks`]: ../harness.go#L215-L247

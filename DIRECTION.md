@@ -73,6 +73,9 @@ Each rule has one operational home; other documents link to it.
   `script/test` is the repository's full-suite contract. Use the latest observation
   by ref append order matching starting tree, worktree, mode and registered command.
   A newer failed/unstable run invalidates older green. No targeted-green gate.
+  When either gate is invalid, report both gate outcomes and recommend rerunning
+  only invalid gates with the command in this worktree at the candidate's exact
+  tree.
   Fresh clones rerun terminal gates, not local reds. Reject stale test/review evidence.
 
 ### Review
