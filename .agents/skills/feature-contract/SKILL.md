@@ -63,6 +63,20 @@ the developer would reject working code that broke any requirement in it.
 When the feature cannot be specified until something is learned, run a
 [spike](../spike/SKILL.md) first and write the contract from its results.
 
+## Amendments
+
+Before changing a contract or its acceptance tests to add, change, or remove a
+binding requirement or constraint, get the decision holder's express approval
+of the exact current and proposed wording and the concrete solution whose
+acceptance changes. Preserve the current contract and tests until approval.
+Existing delegation remains effective within its mandate. Approval to try an
+approach authorizes that attempt only; it leaves alternatives open and does not
+itself change the contract or acceptance criteria. Moving a settled question
+into Decisions follows this procedure when it changes a binding requirement or
+constraint. Routine technical choices and test changes within agreed behavior
+need no routine approval. If implementation notes are recorded, mark them
+replaceable and nonbinding for acceptance and review.
+
 ## Working from a contract
 
 1. Before starting, check unresolved contract decisions under
@@ -74,10 +88,10 @@ When the feature cannot be specified until something is learned, run a
    brief implementers under TDD with whatever parts of the contract a slice needs.
    You may add tests within agreed behaviors; new behaviors and changes to
    decisions or boundaries go to the developer.
-3. Keep the contract current. When a consequential decision changes, update the
-   written contract or brief each affected delegate works from before it
-   continues; a message alone leaves stale written requirements. Move settled
-   questions into Decisions, with no change log in the active contract.
+3. Keep the contract current. When a consequential decision changes, follow the
+   [amendment procedure](#amendments) before updating the contract or briefing
+   affected delegates; a message alone leaves stale written requirements. Move
+   settled questions into Decisions with no change log in the active contract.
 4. In the completion hand-back, add the decisions the contract left open that you
    made and anything in it that proved wrong.
 5. Give the final reviewer the contract's readable path as claims to assess, not as

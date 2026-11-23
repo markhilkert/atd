@@ -1594,7 +1594,7 @@ information). Tests: [`TestVersionCheckComparesWithLatestReleaseTag`],
 
 ## 12. The prose half: skills, and what backs each rule
 
-Everything above is the binary. The rest of atd is eight Markdown skills that
+Everything above is the binary. The rest of atd is nine Markdown skills that
 tell an agent how to work [`sourceSkillNamesForTest`], and the binary knows
 nothing about what they say: it renders, installs and hashes them
 [`renderSkills`] ([section 9](#9-install-update-status-disable)) and never reads
@@ -1603,6 +1603,8 @@ a word of their instructions.
 ```mermaid
 flowchart LR
   dev(["Developer request"]) --> inv["atd-investigate"]
+  dev -->|"delegates decisions"| proxy["atd-developer-proxy"]
+  proxy -->|"acts within the delegated mandate"| fc
   inv -->|"ready to implement"| tdd["atd-tdd"]
   inv -->|"split first"| inv
   inv -->|"spike first"| spk["atd-spike"]

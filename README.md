@@ -62,6 +62,7 @@ The skills carry the procedure:
 
 | Skill | Used by | Purpose |
 |---|---|---|
+| `atd-developer-proxy` | An agent you explicitly authorize to act for you | Resolve decisions within your mandate and bring proposed changes to acceptance criteria to whoever owns the decision |
 | `atd-investigate` | Your agent | Before coding: find consumers and deployment boundaries, check whether the capability already exists, surface real ambiguity, and decide whether to implement, split or spike |
 | `atd-spike` | Your agent | When uncertainty blocks a sound plan: write a bounded brief, run the investigation, and hand back evidence with its limits |
 | `atd-feature-contract` | Your agent and a separate coordinating session | When another session will implement: record one feature's end state and decisions, not how to build it, then work from them |
