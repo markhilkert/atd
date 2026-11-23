@@ -49,7 +49,7 @@ var harnessesForTest = []harnessForTest{
 	},
 }
 
-var sourceSkillNamesForTest = []string{"design-review", "evaluate-review", "feature-contract", "investigate", "review", "reviewer", "spike", "tdd"}
+var sourceSkillNamesForTest = []string{"design-review", "developer-proxy", "evaluate-review", "feature-contract", "investigate", "review", "reviewer", "spike", "tdd"}
 
 var sourceSkillsDirectoryForTest = func() string {
 	directory, err := filepath.Abs(".agents/skills")
@@ -292,7 +292,7 @@ func TestUpdateRefreshesStaleFilesAndPrunesRetiredSkills(t *testing.T) {
 			current := embeddedSourceSkillsForTest(t)
 			useEmbeddedSkillsForTest(t, current)
 			marker := installFakeATDForTest(t)
-			want := harness.name + ": repository enabled; worktree enabled; hooks stale; skills stale atd-evaluate-review, atd-investigate, atd-tdd; skills missing atd-design-review, atd-feature-contract, atd-review, atd-reviewer, atd-spike; skills retired atd-retired; run atd update"
+			want := harness.name + ": repository enabled; worktree enabled; hooks stale; skills stale atd-evaluate-review, atd-investigate, atd-tdd; skills missing atd-design-review, atd-developer-proxy, atd-feature-contract, atd-review, atd-reviewer, atd-spike; skills retired atd-retired; run atd update"
 			if line := statusLineForTest(t, harness); line != want {
 				t.Fatalf("status before update:\n got %q\nwant %q", line, want)
 			}
@@ -359,7 +359,7 @@ func TestUpdateRefusesHandEditedSkillsBeforeWritingAnything(t *testing.T) {
 
 			useEmbeddedSkillsForTest(t, embeddedSourceSkillsForTest(t))
 			installFakeATDForTest(t)
-			want := harness.name + ": repository enabled; worktree enabled; hooks stale; skills stale atd-evaluate-review, atd-tdd; skills missing atd-design-review, atd-feature-contract, atd-review, atd-reviewer, atd-spike; skills retired atd-retired; skills edited atd-host, atd-investigate; run atd update"
+			want := harness.name + ": repository enabled; worktree enabled; hooks stale; skills stale atd-evaluate-review, atd-tdd; skills missing atd-design-review, atd-developer-proxy, atd-feature-contract, atd-review, atd-reviewer, atd-spike; skills retired atd-retired; skills edited atd-host, atd-investigate; run atd update"
 			if line := statusLineForTest(t, harness); line != want {
 				t.Fatalf("status with edited skills:\n got %q\nwant %q", line, want)
 			}
